@@ -12,19 +12,19 @@ namespace DesktopApplication.Objects {
         public string sourcePath {  get; set; }
         public string destinationPath { get; set; }
         [JsonIgnore]
-        public Button sourceButton { get; set; } = new Button { Text = "Select Source" };
+        public Button sourceButton { get; set; } = new Button { Text = "Select Source", Width=139, Height=49 };
         [JsonIgnore]
-        public Button destinationButton { get; set; } = new Button { Text = "Select Destination" };
+        public Button destinationButton { get; set; } = new Button { Text = "Select Destination", Width = 139, Height = 49 };
         [JsonIgnore]
-        public Label sourceLabel {  get; set; } = new Label();
+        public Label sourceLabel {  get; set; } = new Label { Width = 200, Height = 49 };
         [JsonIgnore]
-        public Label destinationLabel { get; set; } = new Label();
+        public Label destinationLabel { get; set; } = new Label { Width = 200, Height = 49 };
         [JsonIgnore]
-        public Button copyButton { get; set; } = new Button { Text = "Copy" };
+        public Button copyButton { get; set; } = new Button {Text = "Copy", Width = 139, Height = 49 };
         [JsonIgnore]
-        public Button StartScheduleButton { get; set; } = new Button { Text = "Start Task" };
+        public Button StartScheduleButton { get; set; } = new Button { Text = "Start Task", Width = 139, Height = 49 };
         [JsonIgnore]
-        public Button EditScheduleButton { get; set; } = new Button { Text = "Edit Schedule" };
+        public Button EditScheduleButton { get; set; } = new Button { Text = "Edit Schedule", Width = 139, Height = 49 };
 
         public bool IsRecurring { get; set; }
         public TimeSpan? RecurrenceInterval { get; set; }

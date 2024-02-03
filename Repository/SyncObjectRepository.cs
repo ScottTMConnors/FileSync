@@ -1,4 +1,5 @@
 ﻿using DesktopApplication.Objects;
+using System.ComponentModel;
 using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text.Json;
@@ -108,47 +109,114 @@ namespace DesktopApplication.Repository {
             return isInRoleWithAccess;
         }
 
-        internal static void CopyFiles(SyncObject syncObject) {
+        internal static async void CopyFiles(SyncObject syncObject) {
             string sourcePath = syncObject.sourcePath;
             string destinationPath = syncObject.destinationPath;
             CopyFiles(sourcePath, destinationPath);
         }
 
-        internal static void CopyFiles(string sourcePath, string destinationPath) {
-            try {
-                if (CheckPath(sourcePath, destinationPath)) {
-                    string[] files = Directory.GetFiles(sourcePath, "*", SearchOption.AllDirectories);
+        internal static async void CopyFiles(string sourcePath, string destinationPath) {
 
 
-                    // Multi threaded copy process
-                    Parallel.ForEach(files, (file) => {
-                        try {
-                            string relativePath = file.Substring(sourcePath.Length + 1);
-                            string destFile = Path.Combine(destinationPath, relativePath);
+            var progressForm = new progressForm();
+            progressForm.Show();
 
-                            string destDirectory = Path.GetDirectoryName(destFile);
-                            if (!Directory.Exists(destDirectory)) {
-                                Directory.CreateDirectory(destDirectory);
+            var backgroundWorker = new BackgroundWorker {
+                WorkerReportsProgress = true
+            };
+
+
+            backgroundWorker.DoWork += (sender, e) => {
+                try {
+                    if (SyncObjectRepository.CheckPath(sourcePath, destinationPath)) {
+                        IEnumerable<string> files = SafeEnumerateFiles(sourcePath, "*", SearchOption.AllDirectories);
+                        int totalFiles = files.Count();
+                        int filesCopied = 0;
+
+
+                        Parallel.ForEach(files, (file) => {
+                            try {
+                                string relativePath = file.Substring(sourcePath.Length).TrimStart(Path.DirectorySeparatorChar);
+                                string destFile = Path.Combine(destinationPath, relativePath);
+
+                                string destDirectory = Path.GetDirectoryName(destFile);
+                                if (!Directory.Exists(destDirectory)) {
+                                    Directory.CreateDirectory(destDirectory);
+                                }
+
+                                if (!File.Exists(destFile) || File.GetLastWriteTime(file) > File.GetLastWriteTime(destFile)) {
+                                    File.Copy(file, destFile, true);
+                                }
+                                filesCopied++;
+                                int progressPercentage = (int)((double)filesCopied / totalFiles * 100);
+                                backgroundWorker.ReportProgress(progressPercentage);
+                            } catch (Exception fileEx) {
+                                Console.WriteLine($"Error copying file {file}: {fileEx.Message}");
+                                // Handle or log the exception
                             }
+                        });
 
-                            if (!File.Exists(destFile) || File.GetLastWriteTime(file) > File.GetLastWriteTime(destFile)) {
-                                File.Copy(file, destFile, true);
-                            }
-                        } catch (Exception fileEx) {
-                            Console.WriteLine($"Error copying file {file}: {fileEx.Message}");
-                            throw;
-                        }
-                    });
-                    MessageBox.Show("Files copied successfully!");
-                };
-            } catch (AggregateException aggEx) {
-                foreach (var ex in aggEx.InnerExceptions) {
+                        MessageBox.Show("Files copied successfully!");
+                    }
+                } catch (Exception ex) {
                     MessageBox.Show($"Error: {ex.Message}");
                 }
-            } catch (Exception ex) {
-                MessageBox.Show($"Error: {ex.Message}");
+            };
+
+            backgroundWorker.ProgressChanged += (sender, e) =>
+            {
+                progressForm.UpdateProgress(e.ProgressPercentage);
+            };
+
+            backgroundWorker.RunWorkerCompleted += (sender, e) =>
+            {
+                progressForm.Close();
+                MessageBox.Show("Copy operation completed.");
+            };
+
+            backgroundWorker.RunWorkerAsync();
+
+        }
+
+
+        private static IEnumerable<string> SafeEnumerateFiles(string path, string searchPattern, SearchOption searchOption) {
+            var dirs = new Stack<string>();
+            dirs.Push(path);
+
+            while (dirs.Count > 0) {
+                string currentDirPath = dirs.Pop();
+                if (!Directory.Exists(currentDirPath)) {
+                    continue;
+                }
+
+                string[] subDirs;
+                string[] files;
+
+                try {
+                    subDirs = Directory.GetDirectories(currentDirPath);
+                    files = Directory.GetFiles(currentDirPath, searchPattern);
+                } catch (UnauthorizedAccessException e) {
+                    Console.WriteLine($"Access denied for directory {currentDirPath}: {e.Message}");
+                    continue;
+                } catch (DirectoryNotFoundException e) {
+                    Console.WriteLine($"{currentDirPath} not found: {e.Message}");
+                    continue;
+                }
+
+                foreach (var file in files) {
+                    yield return file;
+                }
+
+                if (searchOption == SearchOption.AllDirectories) {
+                    foreach (string subDir in subDirs) {
+                        dirs.Push(subDir);
+                    }
+                }
             }
         }
+
+
+
 
 
 
