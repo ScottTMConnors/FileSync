@@ -2,40 +2,9 @@
 using System.ComponentModel;
 using System.Security.AccessControl;
 using System.Security.Principal;
-using System.Text.Json;
 
-namespace DesktopApplication.Repository {
-    internal static class SyncObjectRepository {
-        internal static List<SyncObject> LoadFromFile(string filePath) {
-            try {
-                string jsonString = File.ReadAllText(filePath);
-                // Save the path to app settings
-                Properties.Settings.Default.LastSaveFile = filePath;
-                Properties.Settings.Default.Save();
-                return JsonSerializer.Deserialize<List<SyncObject>>(jsonString);
-            } catch (Exception fileEx) {
-                MessageBox.Show($"Error loading file from {filePath}: {fileEx.Message}");
-                return new List<SyncObject>();
-            }
-        }
-
-        internal static void SaveToFile(List<SyncObject> syncObjects, string fileName) {
-            try {
-
-                string jsonString = JsonSerializer.Serialize(syncObjects);
-                File.WriteAllText(fileName, jsonString);
-
-                // Save the path to app settings
-                Properties.Settings.Default.LastSaveFile = fileName;
-                Properties.Settings.Default.Save();
-                MessageBox.Show("File successfully saved");
-            } catch (Exception fileEx) {
-                // Handle exceptions for individual files here if needed
-                MessageBox.Show($"Error saving file to {fileName}: {fileEx.Message}");
-                // Optionally, rethrow the exception to be caught by AggregateException
-                throw;
-            }
-        }
+namespace DesktopApplication.DataAccess {
+    internal static class FileTransferService {
         internal static bool CheckPath(string filePath) {
             try {
                 if (!Directory.Exists(filePath)) {
@@ -128,7 +97,7 @@ namespace DesktopApplication.Repository {
 
             backgroundWorker.DoWork += (sender, e) => {
                 try {
-                    if (SyncObjectRepository.CheckPath(sourcePath, destinationPath)) {
+                    if (CheckPath(sourcePath, destinationPath)) {
                         IEnumerable<string> files = SafeEnumerateFiles(sourcePath, "*", SearchOption.AllDirectories);
                         int totalFiles = files.Count();
                         int filesCopied = 0;
@@ -163,13 +132,11 @@ namespace DesktopApplication.Repository {
                 }
             };
 
-            backgroundWorker.ProgressChanged += (sender, e) =>
-            {
+            backgroundWorker.ProgressChanged += (sender, e) => {
                 progressForm.UpdateProgress(e.ProgressPercentage);
             };
 
-            backgroundWorker.RunWorkerCompleted += (sender, e) =>
-            {
+            backgroundWorker.RunWorkerCompleted += (sender, e) => {
                 progressForm.Close();
                 MessageBox.Show("Copy operation completed.");
             };
@@ -214,11 +181,5 @@ namespace DesktopApplication.Repository {
                 }
             }
         }
-
-
-
-
-
-
     }
 }
