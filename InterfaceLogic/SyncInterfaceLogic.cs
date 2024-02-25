@@ -1,7 +1,10 @@
 ﻿using DesktopApplication.DataAccess;
 using DesktopApplication.Objects;
 using DesktopApplication.Objects.ViewModels;
+using System.Collections.Concurrent;
 using System.ComponentModel;
+using static DesktopApplication.DataAccess.FileTransferService;
+using static DesktopApplication.DataAccess.SyncObjectDataAccess;
 
 namespace DesktopApplication.InterfaceLogic {
     internal class SyncInterfaceLogic {
@@ -9,21 +12,21 @@ namespace DesktopApplication.InterfaceLogic {
 
         private DataCopyTool formInstance;
 
-        private string saveFile;
+        private string saveFile = "";
 
         public SyncInterfaceLogic(DataCopyTool form) {
             formInstance = form;
             syncObjects = new List<SyncViewModel>();
             saveFile = Properties.Settings.Default.LastSaveFile;
             if ((!string.IsNullOrEmpty(saveFile)) && (File.Exists(saveFile))) {
-                var importSyncObjects = ListSyncObjectToViewModel(SyncObjectDataAccess.LoadFromFile(saveFile));
+                var importSyncObjects = ListSyncObjectToViewModel(LoadFromFile(saveFile));
                 InitializeObjectList(importSyncObjects);
             }
         }
 
         private void SaveData() {
             if ((!string.IsNullOrEmpty(saveFile)) && (File.Exists(saveFile))) {
-                SyncObjectDataAccess.SaveToFile(ListViewModelToSyncObject(syncObjects), saveFile);
+                SaveToFile(ListViewModelToSyncObject(syncObjects), saveFile);
             }
         }
 
@@ -73,7 +76,7 @@ namespace DesktopApplication.InterfaceLogic {
 
                 if (fbd.ShowDialog() == DialogResult.OK) {
 
-                    if (FileTransferService.CheckPath(fbd.SelectedPath)) {
+                    if (CheckPath(fbd.SelectedPath)) {
                         if (isSourcePath) {
                             syncObject.sourcePath = fbd.SelectedPath;
                             syncObject.sourceLabel.Text = fbd.SelectedPath;
@@ -87,9 +90,10 @@ namespace DesktopApplication.InterfaceLogic {
             }
         }
 
-        internal static async void CopyFilesInterface(SyncViewModel syncViewModel) {
+        internal static void CopyFilesInterface(SyncViewModel syncViewModel) {
             string sourcePath = syncViewModel.sourcePath;
             string destinationPath = syncViewModel.destinationPath;
+            var exceptionsBag = new ConcurrentBag<Exception>();
 
             var progressForm = new progressForm();
             progressForm.Show();
@@ -99,7 +103,11 @@ namespace DesktopApplication.InterfaceLogic {
             };
 
             backgroundWorker.DoWork += (sender, e) => {
-                FileTransferService.CopyFiles(sourcePath, destinationPath, backgroundWorker);
+                ProgressReportDelegate progressCallback = (percentage) => {
+                    backgroundWorker.ReportProgress(percentage);
+                };
+
+                CopyFiles(sourcePath, destinationPath, progressCallback, exceptionsBag);
             };
 
             backgroundWorker.ProgressChanged += (sender, e) => {
@@ -108,11 +116,18 @@ namespace DesktopApplication.InterfaceLogic {
 
             backgroundWorker.RunWorkerCompleted += (sender, e) => {
                 progressForm.Close();
-                MessageBox.Show("Copy operation completed.");
+
+                if (exceptionsBag.Any()) {
+                    var errorMessage = $"Copy operation completed with errors:\n{string.Join("\n", exceptionsBag.Select(ex => ex.Message))}";
+                    MessageBox.Show(errorMessage, "Errors Occurred", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                } else {
+                    MessageBox.Show("Copy operation completed successfully.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
             };
 
             backgroundWorker.RunWorkerAsync();
         }
+
 
         //Sync Object Data Access methods
 
@@ -124,7 +139,7 @@ namespace DesktopApplication.InterfaceLogic {
                     fbd.Filter = "JSON files (*.json)|*.json";
                     fbd.RestoreDirectory = true;
                     if (fbd.ShowDialog() == DialogResult.OK) {
-                        MessageBox.Show(SyncObjectDataAccess.SaveToFile(ListViewModelToSyncObject(syncObjects), fbd.FileName));
+                        MessageBox.Show(SaveToFile(ListViewModelToSyncObject(syncObjects), fbd.FileName));
                         saveFile = fbd.FileName;
                         Properties.Settings.Default.LastSaveFile = fbd.FileName;
                     }
@@ -144,7 +159,7 @@ namespace DesktopApplication.InterfaceLogic {
                 if (openFileDialog.ShowDialog() == DialogResult.OK) {
                     filePath = openFileDialog.FileName;
                     MessageBox.Show("File selected: " + filePath);
-                    var importSyncObjects = ListSyncObjectToViewModel(SyncObjectDataAccess.LoadFromFile(filePath));
+                    var importSyncObjects = ListSyncObjectToViewModel(LoadFromFile(filePath));
                     if (importSyncObjects != null) {
                         MessageBox.Show("Save loaded successfully");
                         ResetSettings();
@@ -162,6 +177,7 @@ namespace DesktopApplication.InterfaceLogic {
             syncObjects = new List<SyncViewModel>();
             formInstance.clearPanel();
             Properties.Settings.Default.LastSaveFile = "";
+            saveFile = "";
         }
 
         internal static List<SyncViewModel> ListSyncObjectToViewModel(IEnumerable<SyncObject> syncObjects) {

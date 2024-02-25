@@ -1,33 +1,67 @@
 ﻿using DesktopApplication.Objects;
 using DesktopApplication.Objects.ViewModels;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Security.AccessControl;
 using System.Security.Principal;
 
 namespace DesktopApplication.DataAccess {
     internal static class FileTransferService {
+
+        public delegate void ProgressReportDelegate(int percentage);
+        internal static async void CopyFiles(SyncObject syncObject) {
+            string sourcePath = syncObject.sourcePath;
+            string destinationPath = syncObject.destinationPath;
+            CopyFiles(sourcePath, destinationPath);
+        }
+
+        internal static void CopyFiles(string sourcePath, string destinationPath, ProgressReportDelegate progressCallback = null, ConcurrentBag<Exception> exceptionsBag = null) {
+            try {
+                if (CheckPath(sourcePath, destinationPath)) {
+                    IEnumerable<string> files = SafeEnumerateFiles(sourcePath, "*", SearchOption.AllDirectories);
+                    int totalFiles = files.Count();
+                    int filesCopied = 0;
+
+                    Parallel.ForEach(files, (file) => {
+                        try {
+                            string relativePath = file.Substring(sourcePath.Length).TrimStart(Path.DirectorySeparatorChar);
+                            string destFile = Path.Combine(destinationPath, relativePath);
+
+                            string destDirectory = Path.GetDirectoryName(destFile);
+                            if (!Directory.Exists(destDirectory)) {
+                                Directory.CreateDirectory(destDirectory);
+                            }
+
+                            if (!File.Exists(destFile) || File.GetLastWriteTime(file) > File.GetLastWriteTime(destFile)) {
+                                File.Copy(file, destFile, true);
+                            }
+
+                            Interlocked.Increment(ref filesCopied);
+                            int progressPercentage = (int)((double)filesCopied / totalFiles * 100);
+                            progressCallback?.Invoke(progressPercentage);
+                        } catch (Exception fileEx) {
+                            exceptionsBag?.Add(fileEx);
+                        }
+                    });
+                }
+            } catch (Exception ex) {
+                exceptionsBag?.Add(ex);
+            }
+        }
+
         internal static bool CheckPath(string filePath) {
             try {
                 if (!Directory.Exists(filePath)) {
                     MessageBox.Show($"Path does not exist: {filePath}");
                     return false;
                 }
-
-                // Check if the destination path exists. If not, create it.
-                //if (!Directory.Exists(savePath)) {
-                //    Directory.CreateDirectory(savePath);
-                //}
-
-
                 if (!HasFolderPermission(filePath, FileSystemRights.Read)) {
                     MessageBox.Show("Insufficient read permissions on the source folder. Please update the folder permissions.");
-                    return false; // Exit the method
+                    return false;
                 }
-
-                // Check write permission on the destination folder
                 if (!HasFolderPermission(filePath, FileSystemRights.Write)) {
                     MessageBox.Show("Insufficient write permissions on the destination folder. Please update the folder permissions.");
-                    return false; // Exit the method
+                    return false;
                 }
             } catch (Exception ex) {
                 MessageBox.Show($"Error: {ex.Message}");
@@ -51,7 +85,7 @@ namespace DesktopApplication.DataAccess {
             return true;
         }
 
-        internal static bool HasFolderPermission(string folderPath, FileSystemRights accessRight) {
+        private static bool HasFolderPermission(string folderPath, FileSystemRights accessRight) {
             var isInRoleWithAccess = false;
             try {
                 var directoryInfo = new DirectoryInfo(folderPath);
@@ -78,58 +112,6 @@ namespace DesktopApplication.DataAccess {
 
             return isInRoleWithAccess;
         }
-
-        internal static async void CopyFiles(SyncObject syncObject) {
-            string sourcePath = syncObject.sourcePath;
-            string destinationPath = syncObject.destinationPath;
-            CopyFiles(sourcePath, destinationPath);
-        }
-
-        internal static async void CopyFiles(string sourcePath, string destinationPath, BackgroundWorker? backgroundWorker = null) {
-
-            try {
-                if (CheckPath(sourcePath, destinationPath)) {
-                    IEnumerable<string> files = SafeEnumerateFiles(sourcePath, "*", SearchOption.AllDirectories);
-                    int totalFiles = files.Count();
-                    int filesCopied = 0;
-
-
-                    Parallel.ForEach(files, (file) => {
-                        try {
-                            string relativePath = file.Substring(sourcePath.Length).TrimStart(Path.DirectorySeparatorChar);
-                            string destFile = Path.Combine(destinationPath, relativePath);
-
-                            string destDirectory = Path.GetDirectoryName(destFile);
-                            if (!Directory.Exists(destDirectory)) {
-                                Directory.CreateDirectory(destDirectory);
-                            }
-
-                            if (!File.Exists(destFile) || File.GetLastWriteTime(file) > File.GetLastWriteTime(destFile)) {
-                                File.Copy(file, destFile, true);
-                            }
-                            filesCopied++;
-                            int progressPercentage = (int)((double)filesCopied / totalFiles * 100);
-                            if (backgroundWorker != null) {
-                                backgroundWorker.ReportProgress(progressPercentage);
-                            }
-                            
-                        } catch (Exception fileEx) {
-                            Console.WriteLine($"Error copying file {file}: {fileEx.Message}");
-                            if (backgroundWorker != null) {
-                                MessageBox.Show($"Error copying file {file}: {fileEx.Message}");
-                            }
-                        }
-                    });
-                }
-            } catch (Exception ex) {
-                Console.WriteLine($"Error: {ex.Message}");
-                if (backgroundWorker != null) {
-                    MessageBox.Show($"Error: {ex.Message}");
-                }
-                
-            }
-        }
-
         private static IEnumerable<string> SafeEnumerateFiles(string path, string searchPattern, SearchOption searchOption) {
             var dirs = new Stack<string>();
             dirs.Push(path);
