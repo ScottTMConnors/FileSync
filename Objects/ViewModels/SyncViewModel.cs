@@ -21,12 +21,29 @@ namespace DesktopApplication.Objects.ViewModels {
         public Button StartScheduleButton { get; set; } = new Button { Text = "Start Task", Width = 139, Height = 49 };
         [JsonIgnore]
         public Button EditScheduleButton { get; set; } = new Button { Text = "Edit Schedule", Width = 139, Height = 49 };
+        [JsonIgnore]
+        public CheckBox RecurringCheckbox { get; set; } = new CheckBox { Text = "Sync", Width = 139, Height = 49, Checked = false };
 
         public new string sourcePath {
             get { return base.sourcePath; }
             set {
                 base.sourcePath = value;
-                sourceLabel.Text = value; // Update the label whenever sourcePath is set
+                sourceLabel.Text = value;
+            }
+        }
+
+        public new string destinationPath {
+            get { return base.destinationPath; }
+            set {
+                base.destinationPath = value;
+                destinationLabel.Text = value;
+            }
+        }
+        public new bool IsRecurring {
+            get { return base.IsRecurring; }
+            set {
+                base.IsRecurring = value;
+                RecurringCheckbox.Checked = value;
             }
         }
 
@@ -35,9 +52,9 @@ namespace DesktopApplication.Objects.ViewModels {
             // Initialize sourceLabel.Text with sourcePath if it's not null
             sourceLabel.Text = base.sourcePath ?? string.Empty;
             destinationLabel.Text = base.destinationPath ?? string.Empty;
+            RecurringCheckbox.Checked = base.IsRecurring;
         }
 
-        // Optionally, add a method or constructor to facilitate conversion from SyncObject
         public SyncViewModel(SyncObject syncObject) : this() { // Call default constructor first
             // Manually copy properties from SyncObject to this SyncViewModel
             this.Id = syncObject.Id;

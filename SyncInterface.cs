@@ -42,6 +42,7 @@ namespace DesktopApplication
             dynamicPanel.Controls.Add(syncViewModel.destinationLabel);
             dynamicPanel.Controls.Add(syncViewModel.EditScheduleButton);
             dynamicPanel.Controls.Add(syncViewModel.copyButton);
+            dynamicPanel.Controls.Add(syncViewModel.RecurringCheckbox);
         }
 
     }
